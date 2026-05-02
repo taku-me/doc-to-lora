@@ -447,8 +447,76 @@ class Idefics2PerceiverFlashAttention2(Idefics2PerceiverAttention):
         return attn_output, attn_weights, past_key_value
 
 
+class Idefics2PerceiverEagerAttention(Idefics2PerceiverAttention):
+    """SDPA-based attention compatible with the FlashAttention2 forward signature.
+    Used for non-CUDA backends (MPS, CPU)."""
+
+    def forward(
+        self,
+        latents: torch.Tensor,
+        is_cross_attn: bool = False,
+        context: torch.Tensor | None = None,
+        attention_mask: torch.Tensor | None = None,
+        position_ids: torch.LongTensor | None = None,
+        past_key_value: Cache | None = None,
+        output_attentions: bool = False,
+        use_cache: bool = False,
+        **kwargs,
+    ) -> tuple[torch.Tensor, torch.Tensor | None, tuple[torch.Tensor] | None]:
+        bsz, q_len, _ = latents.size()
+        kv_inp = context if is_cross_attn else latents
+        kv_len = kv_inp.size(1)
+
+        query_states = (
+            self.q_proj(latents)
+            .view(bsz, q_len, self.num_heads, self.head_dim)
+            .transpose(1, 2)
+        )
+        key_states = (
+            self.k_proj(kv_inp)
+            .view(bsz, kv_len, self.num_key_value_heads, self.head_dim)
+            .transpose(1, 2)
+        )
+        value_states = (
+            self.v_proj(kv_inp)
+            .view(bsz, kv_len, self.num_key_value_heads, self.head_dim)
+            .transpose(1, 2)
+        )
+
+        present_key_value = (key_states, value_states) if use_cache else None
+
+        key_states = repeat_kv(key_states, self.num_key_value_groups)
+        value_states = repeat_kv(value_states, self.num_key_value_groups)
+
+        attn_mask = None
+        if attention_mask is not None:
+            # flash variant accepts (bsz, kv_len) padding mask (1=keep, 0=pad)
+            if attention_mask.dim() == 2:
+                additive = (1.0 - attention_mask.to(query_states.dtype)) * torch.finfo(
+                    query_states.dtype
+                ).min
+                attn_mask = additive[:, None, None, :]
+            else:
+                attn_mask = attention_mask
+
+        attn_output = torch.nn.functional.scaled_dot_product_attention(
+            query_states,
+            key_states,
+            value_states,
+            attn_mask=attn_mask,
+            dropout_p=0.0,
+            is_causal=False,
+        )
+
+        attn_output = attn_output.transpose(1, 2).contiguous()
+        attn_output = attn_output.reshape(bsz, q_len, self.num_heads * self.head_dim)
+        attn_output = self.o_proj(attn_output)
+
+        return attn_output, None, present_key_value
+
+
 IDEFICS2_PERCEIVER_ATTENTION_CLASSES = {
-    # "eager": Idefics2PerceiverAttention,
+    "eager": Idefics2PerceiverEagerAttention,
     "flash_attention_2": Idefics2PerceiverFlashAttention2,
 }
 
@@ -612,7 +680,6 @@ class Idefics2PerceiverResampler(Idefics2PreTrainedModel):
         self.layernorm = Idefics2RMSNorm(self.hidden_size, eps=self.rms_norm_eps)
 
         self._use_flash_attention_2 = config._attn_implementation == "flash_attention_2"
-        assert self._use_flash_attention_2
 
     def forward(
         self,
@@ -629,13 +696,25 @@ class Idefics2PerceiverResampler(Idefics2PreTrainedModel):
 
         latents = self.latents_q.unsqueeze(0).expand((bsz, *self.latents_q.size()))
 
-        attention_mask = (
-            _prepare_4d_attention_mask(
-                attention_mask, latents.dtype, tgt_len=self.n_latents
-            )
-            if not self._use_flash_attention_2
-            else attention_mask
-        )
+        if not self._use_flash_attention_2:
+            # eager / SDPA path — runs each layer with a 2D padding mask.
+            # Avoids flash-attn-only `unpad_input` and cu_seq_lens machinery.
+            compressed_context = latents
+            for layer in self.layers:
+                if layer.is_cross_attn:
+                    attn_mask = attention_mask
+                else:
+                    attn_mask = None
+                layer_outputs = layer(
+                    latents=compressed_context,
+                    context=context,
+                    attention_mask=attn_mask,
+                    past_key_value=None,
+                    output_attentions=False,
+                    use_cache=False,
+                )
+                compressed_context = layer_outputs[0]
+            return self.layernorm(compressed_context)
 
         compressed_context = latents
 

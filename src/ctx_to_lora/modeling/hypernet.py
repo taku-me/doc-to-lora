@@ -1,3 +1,4 @@
+import contextlib
 import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -25,6 +26,14 @@ from transformers import (
 )
 from transformers.modeling_outputs import ModelOutput
 from transformers.models.modernbert.modeling_modernbert import ModernBertModel
+
+
+def _autocast_ctx(device, dtype=torch.bfloat16):
+    dev_type = device.type if hasattr(device, "type") else str(device)
+    if dev_type == "cuda":
+        return torch.autocast(device_type="cuda", dtype=dtype)
+    return contextlib.nullcontext()
+
 
 from ctx_to_lora.configs import (
     AggregatorArguments,
@@ -397,7 +406,7 @@ class HyperLoRA(nn.Module):
         n_ctx_chunks: Integer[Tensor, "n_ctx"] | None = None,
     ):
         # [bs, n_layers, n_total_modules, r, feature_dim]
-        with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+        with _autocast_ctx(features.device):
             if self.aggregator.layer_to_layer and self.iterative_mode:
                 # iterative inference
                 # features: [bs num_layers seq_len feature_dim]

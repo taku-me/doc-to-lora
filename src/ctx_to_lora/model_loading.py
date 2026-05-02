@@ -15,6 +15,15 @@ from transformers import (
 
 logger = logging.getLogger()
 
+
+def _default_device():
+    if torch.cuda.is_available():
+        return "cuda"
+    if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+
 GEMMA_VISION_MODELS = [
     "google/gemma-3-4b-it",
     "google/gemma-3-12b-it",
@@ -35,9 +44,11 @@ def get_model_and_tokenizer(
     model_kwargs=None,
     tokenizer_kwargs=None,
     use_q_lora=False,
-    device="cuda",
+    device=None,
     dtype=torch.bfloat16,
 ):
+    if device is None:
+        device = _default_device()
     model = get_model(
         model_name_or_path,
         train,
@@ -100,9 +111,11 @@ def get_model(
     peft_config=None,
     model_kwargs=None,
     use_q_lora=False,
-    device="cuda",
+    device=None,
     dtype=torch.bfloat16,
 ):
+    if device is None:
+        device = _default_device()
     model_init_kwargs = dict(
         pretrained_model_name_or_path=model_name_or_path,
         device_map=device,
@@ -133,12 +146,7 @@ def get_model(
         model_init_kwargs["torch_dtype"] = torch.float32
         model_init_kwargs.pop("use_cache")
 
-    if use_q_lora:
-        # https://huggingface.co/blog/4bit-transformers-bitsandbytes
-        # https://colab.research.google.com/drive/1VoYNfYDKcKRQRor98Zbf2-9VQTtGJ24k?usp=sharing
-        # see bitsandbytes for the quantization implementation https://github.com/bitsandbytes-foundation/bitsandbytes
-        # see unsloth https://huggingface.co/docs/trl/v0.7.11/en/sft_trainer#accelerate-fine-tuning-2x-using-unsloth
-        # does work currently bc it modifies the forward pass call of Linear
+    if use_q_lora and torch.cuda.is_available():
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_use_double_quant=True,
@@ -146,6 +154,11 @@ def get_model(
             bnb_4bit_compute_dtype=torch.bfloat16,
         )
         model_init_kwargs["quantization_config"] = bnb_config
+    elif use_q_lora:
+        logger.warning(
+            "use_q_lora=True ignored: bitsandbytes 4-bit quant requires CUDA. "
+            "Loading ctx encoder in full precision."
+        )
 
     logger.debug(f"Model init kwargs: {model_init_kwargs}")
     if not is_vision_model:

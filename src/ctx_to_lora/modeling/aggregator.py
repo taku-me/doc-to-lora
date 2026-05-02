@@ -2,6 +2,7 @@ import logging
 from dataclasses import dataclass
 from enum import Enum
 
+import torch
 from einops import rearrange, repeat, unpack
 from jaxtyping import Float, Integer
 from torch import Tensor, nn
@@ -112,7 +113,9 @@ class Perceiver(nn.Module):
             n_latents=n_latent_queries,
             intermediate_size_factor=4,
             hidden_size=output_size,
-            attn_implementation="flash_attention_2",
+            attn_implementation=(
+                "flash_attention_2" if torch.cuda.is_available() else "eager"
+            ),
         )
         self.decoder_config = Idefics2PerceiverConfig(
             input_size=output_size,
@@ -122,7 +125,9 @@ class Perceiver(nn.Module):
             n_latents=n_output_queries,
             intermediate_size_factor=4,
             hidden_size=output_size,
-            attn_implementation="flash_attention_2",
+            attn_implementation=(
+                "flash_attention_2" if torch.cuda.is_available() else "eager"
+            ),
         )
         self.perceiver = Idefics2Perceiver(self.config, self.decoder_config)
         self.iterative_mode = False

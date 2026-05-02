@@ -1,3 +1,4 @@
+import contextlib
 import os
 import sys
 from pathlib import Path
@@ -14,8 +15,17 @@ from ctx_to_lora.modeling import hypernet
 
 sys.modules["ctx_to_lora.modeling_utils"] = hypernet
 
+
+def _pick_device():
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
 # Global state
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = _pick_device()
 modulated_model = None
 chat_history = []
 ctx_tokenizer = None
@@ -199,7 +209,12 @@ def generate_response(
         print(f"Processing single context with scaler: {context_scaler}")
         print(f"Bias scaler: {bias_scaler}")
 
-        with torch.inference_mode(), torch.amp.autocast(str(device)):
+        amp_ctx = (
+            torch.amp.autocast(str(device))
+            if device.type == "cuda"
+            else contextlib.nullcontext()
+        )
+        with torch.inference_mode(), amp_ctx:
             ctx_inputs = process_context(context)
             ctx_ids = ctx_inputs["ctx_ids"].to(device)
             ctx_attn_mask = ctx_inputs["ctx_attn_mask"].to(device)
