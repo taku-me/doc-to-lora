@@ -1,0 +1,54 @@
+{
+  "_listing8_format": "Answer the following question. Output only the answer and do not output any other words.\n\nQuestion: {input}",
+  "_note": "Listing 8 from arXiv:2602.15902 App.B (verbatim). Note the DOUBLE newline (\\n\\n) before Question:",
+  "datasets": [
+    {
+      "doc_id": "sec_3_architecture",
+      "source": "data/paper_excerpts/sec_3_architecture.md",
+      "approx_tokens": 1900,
+      "qa_pairs": [
+        {"q": "What does H_φ map a raw string to?", "a": "LoRA parameters"},
+        {"q": "What is the dimensionality of A_l in Eq. 5?", "a": "r × d_in"},
+        {"q": "What is the dimensionality of B_l in Eq. 5?", "a": "d_out × r"},
+        {"q": "What architecture is the hypernetwork structured as?", "a": "Perceiver-style cross-attention module"},
+        {"q": "How are chunks combined in long-context composition?", "a": "Concatenated along the rank dimension"},
+        {"q": "What is the total rank when K chunks are combined?", "a": "r·K"},
+        {"q": "What is α_l in Eq. 5?", "a": "A learnable per-layer scalar"},
+        {"q": "What does Z_0 represent?", "a": "The token embeddings"}
+      ]
+    },
+    {
+      "doc_id": "sec_4_niah",
+      "source": "data/paper_excerpts/sec_4_niah.md",
+      "approx_tokens": 1700,
+      "qa_pairs": [
+        {"q": "What is the maximum chunk size D2L uses during NIAH evaluation?", "a": "1024 tokens"},
+        {"q": "What is the maximum sequence length seen during training?", "a": "256 tokens"},
+        {"q": "What base LLM is used for NIAH experiments?", "a": "gemma-2-2b-it"},
+        {"q": "What is the context length of the base LLM in NIAH?", "a": "8K"},
+        {"q": "How many chunks does D2L generalize to (quintuple of training)?", "a": "40 chunks"},
+        {"q": "How much additional memory does the base model use for a 128K haystack?", "a": "More than 12 GB"},
+        {"q": "How much memory does the internalized model use regardless of haystack length?", "a": "Less than 50 MB"},
+        {"q": "What benchmark is the NIAH task based on?", "a": "RULER"},
+        {"q": "How long are training inputs in tokens?", "a": "32 to 256 tokens"},
+        {"q": "What is the minimum chunk size during training?", "a": "25 tokens"}
+      ]
+    },
+    {
+      "doc_id": "sec_5_long_context",
+      "source": "data/paper_excerpts/sec_5_long_context.md",
+      "approx_tokens": 1100,
+      "qa_pairs": [
+        {"q": "What is the longest training sample in tokens?", "a": "2344"},
+        {"q": "What is the median training context length in tokens?", "a": "274"},
+        {"q": "What is D2L (iterative) update memory in GB?", "a": "3.791"},
+        {"q": "What is the Mean Update Latency for D2L (batched) on 2WikiMultihopQA?", "a": "0.209 seconds"},
+        {"q": "What is the Mean Update Latency for CD oracle on 2WikiMultihopQA?", "a": "40.171 seconds"},
+        {"q": "How much VRAM does CD with 5 generated queries use?", "a": "79 GB"},
+        {"q": "What three benchmarks are used for long-context evaluation?", "a": "2WikiMultihopQA, MultiFieldQA, and QASPER"},
+        {"q": "How much memory does ICL baseline need during generation?", "a": "Around 1 GB"},
+        {"q": "How much memory do in-parameter knowledge methods need during generation?", "a": "Less than 100 MB"}
+      ]
+    }
+  ]
+}
