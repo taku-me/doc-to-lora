@@ -31,7 +31,8 @@ from ctx_to_lora.configs import (
     CtxEncoderArguments,
     HypernetArguments,
 )
-from ctx_to_lora.data.processing import tokenize_ctx_text
+from ctx_to_lora.data.definitions import CTX_AFFIXES
+from ctx_to_lora.data.processing import split_too_long_ctx, tokenize_ctx_text
 from ctx_to_lora.model_loading import (
     get_model,
     get_tokenizer,
@@ -461,6 +462,7 @@ class ModulatedPretrainedModel(nn.Module):
         self.inp_compressor = inp_compressor
         self.model_accepts_loss_kwargs = True
         self.generated_loras = None
+        self.generated_n_ctx_chunks = None
 
         self.register_module("base_model", base_model)
         self._init_model()
@@ -781,10 +783,63 @@ class ModulatedPretrainedModel(nn.Module):
         return apply_lora_to_layers(*args, **kwargs)
 
     # for simple api usage
-    def internalize(self, ctx_str: str):
+    def internalize(self, ctx_str: str, max_chunk_len: int | None = None):
+        """Tokenize ``ctx_str`` and cache its generated LoRA weights.
+
+        When ``max_chunk_len`` is given and the tokenized context exceeds it,
+        the context is split into chunks using
+        :func:`split_too_long_ctx` (mirroring the training-time chunking
+        pipeline), each chunk produces its own LoRA, and the chunk count is
+        recorded so that :meth:`generate` merges them via ``combine_lora``.
+        """
         ctx_tokenizer = get_tokenizer(self.ctx_encoder.base_model.name_or_path)
-        ctx_ids = tokenize_ctx_text(dict(context=[ctx_str]), ctx_tokenizer)["ctx_ids"]
-        return self._internalize_from_ids(torch.tensor(ctx_ids, device=self.device))
+        tokenized = tokenize_ctx_text(dict(context=[ctx_str]), ctx_tokenizer)
+        full_ids = tokenized["ctx_ids"][0]
+
+        if max_chunk_len is None or len(full_ids) <= max_chunk_len:
+            ids_tensor = torch.tensor([full_ids], device=self.device)
+            self._internalize_from_ids(ids_tensor)
+            self.generated_n_ctx_chunks = torch.tensor(
+                [1], device=self.device, dtype=torch.int32
+            )
+            return
+
+        affix_key = self.ctx_encoder.base_model.name_or_path
+        if affix_key not in CTX_AFFIXES:
+            affix_key = self.base_model.name_or_path
+        if affix_key not in CTX_AFFIXES:
+            raise KeyError(
+                f"No CTX_AFFIXES entry for {affix_key!r}; cannot auto-chunk. "
+                "Add an entry to ctx_to_lora.data.definitions.CTX_AFFIXES or "
+                "tokenize and chunk manually before calling _internalize_from_ids()."
+            )
+
+        split = split_too_long_ctx(
+            {"ctx_ids": full_ids},
+            model_name_or_path=affix_key,
+            num_chunk_probs=None,
+            max_chunk_len=max_chunk_len,
+            min_chunk_len=-1,
+            max_num_split=None,
+            is_train=False,
+        )
+        chunks = split["ctx_ids"]
+        n_chunks = split["n_ctx_chunks"]
+
+        pad_id = ctx_tokenizer.pad_token_id
+        if pad_id is None:
+            pad_id = ctx_tokenizer.eos_token_id or 0
+        padded_len = max(len(c) for c in chunks)
+        padded = [list(c) + [pad_id] * (padded_len - len(c)) for c in chunks]
+        attn = [[1] * len(c) + [0] * (padded_len - len(c)) for c in chunks]
+
+        ctx_ids_t = torch.tensor(padded, device=self.device)
+        ctx_attn_mask_t = torch.tensor(attn, device=self.device)
+
+        self._internalize_from_ids(ctx_ids_t, ctx_attn_mask=ctx_attn_mask_t)
+        self.generated_n_ctx_chunks = torch.tensor(
+            [n_chunks], device=self.device, dtype=torch.int32
+        )
 
     def _internalize_from_ids(
         self,
@@ -803,6 +858,7 @@ class ModulatedPretrainedModel(nn.Module):
 
     def reset(self):
         self.generated_loras = None
+        self.generated_n_ctx_chunks = None
         layers = get_layers(self.base_model)
         for layer_idx in self.hypernet.layer_indices:
             for module_info in get_peft_modules(layers[layer_idx], self.peft_config):
@@ -840,7 +896,9 @@ class ModulatedPretrainedModel(nn.Module):
         elif ctx_ids is None and self.generated_loras:
             generated_loras = self.generated_loras
             if n_ctx_chunks is None:
-                n_ctx_chunks = torch.tensor((1,), device=self.device)
+                n_ctx_chunks = self.generated_n_ctx_chunks
+                if n_ctx_chunks is None:
+                    n_ctx_chunks = torch.tensor((1,), device=self.device)
             print(
                 "*" * 100
                 + "\n\nUsing internalized LoRAs for generation\n\n"
