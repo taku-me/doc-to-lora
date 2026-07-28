@@ -15,6 +15,14 @@ dependencies = [
     "jupyter",
     "matplotlib",
     "hf_transfer",
+    # torch は 8 ファイル以上で直接 import しているが宣言が無く、
+    # torchmetrics / peft / accelerate が**無条件で**要求するおかげで
+    # たまたま残っていただけだった（2026-07-28 の依存点検で判明）。
+    # 親の版が変わって要求が消えれば uv sync で刈られ、
+    # 学習・推論が import エラーで無言死する
+    # （2026-07-13 に stable-audio-web で同じことが起きている）。
+    # インストール済みの版に合わせて明示する。
+    "torch==2.7.1",
     "torchmetrics",
     "inflect",
     "pre-commit",
