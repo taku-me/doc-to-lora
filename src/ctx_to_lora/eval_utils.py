@@ -54,7 +54,11 @@ from ctx_to_lora.model_loading import (
 from ctx_to_lora.modeling.context_distillation import CtxDistillModel
 from ctx_to_lora.modeling.generative_adapter import GenerativeAdapter
 from ctx_to_lora.modeling.hypernet import ModulatedPretrainedModel
-from ctx_to_lora.modeling.llm_lingua import LLMLinguaModel
+
+try:
+    from ctx_to_lora.modeling.llm_lingua import LLMLinguaModel
+except ImportError:
+    LLMLinguaModel = None  # optional comparison method; not needed for D2L eval
 from ctx_to_lora.modeling.text_to_lora import TextToLoRA
 from ctx_to_lora.tracker.tracker import (
     add_tracker,
@@ -713,7 +717,9 @@ def evaluate(
     """Main evaluation function."""
     assert split in ["validation", "test"]
     ctx_name = None
-    model_kwargs = dict(attn_implementation="flash_attention_2")
+    model_kwargs = dict(
+        attn_implementation="flash_attention_2" if torch.cuda.is_available() else "eager"
+    )
 
     tokenizer = get_tokenizer(args.model_name_or_path, train=False)
     if tokenizer.pad_token_id is None:
@@ -725,7 +731,9 @@ def evaluate(
 
     if model_name_or_path is None:
         try:
-            state_dict = torch.load(checkpoint_path, weights_only=False)
+            state_dict = torch.load(
+                checkpoint_path, weights_only=False, map_location="cpu"
+            )
         except FileNotFoundError:
             raise FileNotFoundError(f"Checkpoint {checkpoint_path} not found. ")
         ctx_name = state_dict["ctx_encoder_args"].ctx_encoder_model_name_or_path
@@ -734,7 +742,7 @@ def evaluate(
             state_dict,
             train=False,
             base_model_kwargs=model_kwargs,
-            use_flash_attn=True,
+            use_flash_attn=torch.cuda.is_available(),
             use_sequence_packing=False,  # for generation
             user_defined_scaling=args.gen_lora_scaling,
         )
@@ -756,7 +764,7 @@ def evaluate(
             train=False,
             requires_grad=False,
             model_kwargs=model_kwargs,
-            use_flash_attn=True,
+            use_flash_attn=torch.cuda.is_available(),
         )
         add_tracker(base_model.generate, "generate")
         if use_cd := getattr(args, "use_cd", False):

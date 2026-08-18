@@ -1,0 +1,5 @@
+{"type": "session_start", "ts": "2026-05-07T07:16:10.352+00:00", "session_id": "20260507_161610_dhjh"}
+{"type": "turn_start", "ts": "2026-05-07T07:16:39.588+00:00", "turn": 1}
+{"type": "turn_end", "ts": "2026-05-07T07:18:10.383+00:00", "turn": 1, "model": "qwen3.6:35b-a3b-q4_K_M", "latency_ms": 90794, "guard_blocked": false, "error": null, "tool_call_count": 3}
+{"type": "turn_start", "ts": "2026-05-07T07:19:32.507+00:00", "turn": 2}
+{"type": "turn_end", "ts": "2026-05-07T07:32:52.281+00:00", "turn": 2, "model": "qwen3.6:35b-a3b-q4_K_M", "latency_ms": 799775, "guard_blocked": false, "error": null, "tool_call_count": 50}

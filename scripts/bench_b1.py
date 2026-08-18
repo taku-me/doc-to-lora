@@ -36,9 +36,8 @@ ROOT = Path(__file__).resolve().parent.parent
 EXCERPTS_DIR = ROOT / "data" / "paper_excerpts"
 QA_PATH = EXCERPTS_DIR / "qa_pairs.json"
 
-OBSIDIAN_LOG_DIR = Path(
-    "/Users/taku.me/Library/Mobile Documents/iCloud~md~obsidian/Documents/"
-    "tkmych525@gmail.com/05_Projects/doc-to-lora/_logs"
+OBSIDIAN_LOG_DIR = (
+    Path.home() / "ObsidianVaultSync" / "takumi-obsidian" / "05_Projects" / "doc-to-lora" / "_logs"
 )
 
 DAEMON_URL = "http://127.0.0.1:8765"
@@ -147,9 +146,7 @@ def render_question_block(
         f"### Q{idx}: {q}\n\n"
         f"**Gold answer:** `{gold}`\n\n"
         f"| mode | input_tok | out_tok | elapsed | ROUGE-L | overlap | answer |\n"
-        f"|---|---:|---:|---:|---:|---:|---|\n"
-        + "\n".join(rows)
-        + "\n"
+        f"|---|---:|---:|---:|---:|---:|---|\n" + "\n".join(rows) + "\n"
     )
     return block, metrics
 
@@ -157,7 +154,9 @@ def render_question_block(
 def render_summary(per_doc_metrics: dict[str, list[dict[str, dict]]]) -> str:
     """全文書合算の mode 別平均を表に."""
     lines = ["## Summary (mean across all questions)\n"]
-    lines.append("| mode | mean input_tok | mean elapsed | mean ROUGE-L | mean overlap | n |")
+    lines.append(
+        "| mode | mean input_tok | mean elapsed | mean ROUGE-L | mean overlap | n |"
+    )
     lines.append("|---|---:|---:|---:|---:|---:|")
     agg = {"base": [], "rag": [], "d2l": []}
     for _, qs in per_doc_metrics.items():
@@ -183,7 +182,9 @@ def render_summary(per_doc_metrics: dict[str, list[dict[str, dict]]]) -> str:
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--doc", help="単一 doc_id だけ実行 (省略時は全 docs)")
-    p.add_argument("--max-q", type=int, default=0, help="各 doc あたり最大質問数 (0=全部)")
+    p.add_argument(
+        "--max-q", type=int, default=0, help="各 doc あたり最大質問数 (0=全部)"
+    )
     p.add_argument(
         "--output",
         type=Path,
@@ -217,8 +218,10 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 3
-        print(f"[B1] daemon healthy, backend={info['backend']}, "
-              f"existing_loras={info['loras_count']}")
+        print(
+            f"[B1] daemon healthy, backend={info['backend']}, "
+            f"existing_loras={info['loras_count']}"
+        )
 
         for d in docs:
             doc_id = d["doc_id"]

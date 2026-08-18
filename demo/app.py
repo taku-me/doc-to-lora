@@ -596,7 +596,6 @@ def create_demo():
 
                 chatbot = gr.Chatbot(
                     label="Conversation",
-                    show_copy_button=True,
                     height=500,
                     elem_id="chatbot",
                     elem_classes="chat-container",

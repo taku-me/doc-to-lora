@@ -132,7 +132,7 @@ def get_model(
         "bert" in model_name_or_path.lower() or "gte" in model_name_or_path.lower()
     )
 
-    if use_flash_attn:
+    if use_flash_attn and torch.cuda.is_available():
         if "gte" not in model_name_or_path:
             model_init_kwargs["attn_implementation"] = "flash_attention_2"
         elif "gte" in model_name_or_path:
