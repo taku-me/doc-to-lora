@@ -13,18 +13,6 @@ BASE_DATA_PATH = Path(__file__).parent.parent / "data" / "raw_datasets" / "self_
 
 
 
-def _safe_path(*parts):
-    """Resolve parts under BASE_DATA_PATH; return None if it escapes the base."""
-    base = BASE_DATA_PATH.resolve()
-    try:
-        p = base.joinpath(*parts).resolve()
-    except (OSError, ValueError):
-        return None
-    if p != base and base not in p.parents:
-        return None
-    return p
-
-
 # Cache for tokenizers
 tokenizer_cache = {}
 
@@ -58,10 +46,14 @@ def discover_folders():
 
 def discover_parquet_files(folder_path):
     """Discover all parquet files in a folder"""
-    full_path = _safe_path(folder_path)
+    # Only folders found under the data dir; this blocks "../" and absolute
+    # paths without breaking symlinked data folders.
+    if folder_path not in discover_folders():
+        return []
+    full_path = BASE_DATA_PATH / folder_path
     parquet_files = []
 
-    if full_path is not None and full_path.exists():
+    if full_path.exists():
         for parquet_file in full_path.glob("**/*.parquet"):
             rel_path = parquet_file.relative_to(full_path)
             parquet_files.append(str(rel_path))
@@ -125,14 +117,10 @@ def api_load_data():
 
     try:
         # Construct full path
-        full_path = _safe_path(folder, parquet_file)
-
-        if (
-            full_path is None
-            or full_path.suffix != ".parquet"
-            or not full_path.is_file()
-        ):
+        # Only files actually listed for this folder (allowlist, no raw paths).
+        if parquet_file not in discover_parquet_files(folder):
             return jsonify({"error": "File not found"}), 404
+        full_path = BASE_DATA_PATH / folder / parquet_file
 
         # Extract model name for tokenizer
         model_name = extract_model_name_from_folder(folder)

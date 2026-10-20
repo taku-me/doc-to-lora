@@ -378,8 +378,8 @@
                             <div class="stat-label">Questions per Sample</div>
                         </div>
                     </div>
-                    <p><strong>Model:</strong> ${data.model_name}</p>
-                    <p><strong>File:</strong> ${data.file_path}</p>
+                    <p><strong>Model:</strong> ${escapeHtml(String(data.model_name))}</p>
+                    <p><strong>File:</strong> ${escapeHtml(String(data.file_path))}</p>
                 </div>
             `;
 

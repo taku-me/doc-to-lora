@@ -683,7 +683,9 @@ if __name__ == "__main__":
     server_port = int(os.environ.get("DEMO_SERVER_PORT", "7861"))
     auth = None
     if os.environ.get("DEMO_AUTH"):
-        user, _, password = os.environ["DEMO_AUTH"].partition(":")
+        user, sep, password = os.environ["DEMO_AUTH"].partition(":")
+        if not sep or not user or not password:
+            raise SystemExit("DEMO_AUTH must be 'user:password' (both non-empty)")
         auth = (user, password)
     demo.launch(
         server_name=server_name,
