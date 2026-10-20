@@ -41,6 +41,12 @@ dependencies = [
     "llmlingua>=0.2.2",
 ]
 
+[tool.uv]
+# setuptools>=82 removes pkg_resources, which tensorboard 2.19/2.20 still
+# imports (the `tensorboard` CLI fails). tensorboard 2.21 drops it but needs
+# protobuf>=6, which vllm 0.8.5's opentelemetry pins (<5) rule out.
+constraint-dependencies = ["setuptools<82"]
+
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"

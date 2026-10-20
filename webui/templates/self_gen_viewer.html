@@ -353,13 +353,13 @@
                 const data = await response.json();
 
                 if (data.error) {
-                    resultsDiv.innerHTML = `<div class="error"><strong>Error:</strong> ${data.error}</div>`;
+                    resultsDiv.innerHTML = `<div class="error"><strong>Error:</strong> ${escapeHtml(String(data.error))}</div>`;
                     return;
                 }
 
                 displayData(data);
             } catch (error) {
-                resultsDiv.innerHTML = `<div class="error"><strong>Error:</strong> ${error.message}</div>`;
+                resultsDiv.innerHTML = `<div class="error"><strong>Error:</strong> ${escapeHtml(String(error.message))}</div>`;
             }
         }
 
@@ -378,8 +378,8 @@
                             <div class="stat-label">Questions per Sample</div>
                         </div>
                     </div>
-                    <p><strong>Model:</strong> ${data.model_name}</p>
-                    <p><strong>File:</strong> ${data.file_path}</p>
+                    <p><strong>Model:</strong> ${escapeHtml(String(data.model_name))}</p>
+                    <p><strong>File:</strong> ${escapeHtml(String(data.file_path))}</p>
                 </div>
             `;
 

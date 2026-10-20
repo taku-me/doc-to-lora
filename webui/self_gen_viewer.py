@@ -1,3 +1,4 @@
+import os
 import traceback
 from pathlib import Path
 
@@ -9,6 +10,8 @@ app = Flask(__name__)
 
 # Base path for self_gen data
 BASE_DATA_PATH = Path(__file__).parent.parent / "data" / "raw_datasets" / "self_gen"
+
+
 
 # Cache for tokenizers
 tokenizer_cache = {}
@@ -43,6 +46,10 @@ def discover_folders():
 
 def discover_parquet_files(folder_path):
     """Discover all parquet files in a folder"""
+    # Only folders found under the data dir; this blocks "../" and absolute
+    # paths without breaking symlinked data folders.
+    if folder_path not in discover_folders():
+        return []
     full_path = BASE_DATA_PATH / folder_path
     parquet_files = []
 
@@ -95,17 +102,25 @@ def api_load_data():
     """API endpoint to load and display data from a parquet file"""
     folder = request.args.get("folder", "")
     parquet_file = request.args.get("file", "")
-    num_samples = int(request.args.get("num_samples", 100))
+    try:
+        num_samples = int(request.args.get("num_samples", 100))
+    except ValueError:
+        return jsonify({"error": "num_samples must be an integer"}), 400
+    num_samples = max(1, min(num_samples, 10000))
 
     if not folder or not parquet_file:
         return jsonify({"error": "Missing parameters"}), 400
+    # Only folders that actually exist under the data dir (also limits which
+    # tokenizer names can be loaded from the Hub).
+    if folder not in discover_folders():
+        return jsonify({"error": "Unknown folder"}), 400
 
     try:
         # Construct full path
+        # Only files actually listed for this folder (allowlist, no raw paths).
+        if parquet_file not in discover_parquet_files(folder):
+            return jsonify({"error": "File not found"}), 404
         full_path = BASE_DATA_PATH / folder / parquet_file
-
-        if not full_path.exists():
-            return jsonify({"error": f"File not found: {full_path}"}), 404
 
         # Extract model name for tokenizer
         model_name = extract_model_name_from_folder(folder)
@@ -161,10 +176,20 @@ def api_load_data():
 
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+        # Details go to the server log only, not to the client.
+        return jsonify({"error": f"Internal error ({type(e).__name__})"}), 500
 
 
 if __name__ == "__main__":
     print(f"Data path: {BASE_DATA_PATH}")
     print(f"Available folders: {discover_folders()}")
-    app.run(debug=True, host="0.0.0.0", port=5001)
+    # Local-only by default. To expose on the network set e.g.
+    # SELF_GEN_VIEWER_HOST=0.0.0.0. The Werkzeug debugger (remote code
+    # execution) is never enabled for non-local hosts.
+    host = os.environ.get("SELF_GEN_VIEWER_HOST", "127.0.0.1")
+    port = int(os.environ.get("SELF_GEN_VIEWER_PORT", "5001"))
+    debug = os.environ.get("SELF_GEN_VIEWER_DEBUG") == "1" and host in (
+        "127.0.0.1",
+        "localhost",
+    )
+    app.run(debug=debug, host=host, port=port)
