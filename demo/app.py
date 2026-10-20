@@ -677,9 +677,18 @@ def create_demo():
 
 if __name__ == "__main__":
     demo = create_demo()
+    # Local-only by default. To expose on the network set e.g.
+    # DEMO_SERVER_NAME=0.0.0.0 (consider also setting DEMO_AUTH="user:pass").
+    server_name = os.environ.get("DEMO_SERVER_NAME", "127.0.0.1")
+    server_port = int(os.environ.get("DEMO_SERVER_PORT", "7861"))
+    auth = None
+    if os.environ.get("DEMO_AUTH"):
+        user, _, password = os.environ["DEMO_AUTH"].partition(":")
+        auth = (user, password)
     demo.launch(
-        server_name="0.0.0.0",
-        server_port=7861,
+        server_name=server_name,
+        server_port=server_port,
         share=False,
-        debug=True,
+        auth=auth,
+        debug=os.environ.get("DEMO_DEBUG") == "1",
     )

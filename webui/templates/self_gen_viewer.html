@@ -353,13 +353,13 @@
                 const data = await response.json();
 
                 if (data.error) {
-                    resultsDiv.innerHTML = `<div class="error"><strong>Error:</strong> ${data.error}</div>`;
+                    resultsDiv.innerHTML = `<div class="error"><strong>Error:</strong> ${escapeHtml(String(data.error))}</div>`;
                     return;
                 }
 
                 displayData(data);
             } catch (error) {
-                resultsDiv.innerHTML = `<div class="error"><strong>Error:</strong> ${error.message}</div>`;
+                resultsDiv.innerHTML = `<div class="error"><strong>Error:</strong> ${escapeHtml(String(error.message))}</div>`;
             }
         }
 
